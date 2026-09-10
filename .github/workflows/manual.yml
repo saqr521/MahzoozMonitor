@@ -1,0 +1,53 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '8.9'
+
+      - name: Extract project ZIP
+        shell: bash
+        run: |
+          ZIP_FILE=$(find . -maxdepth 1 -type f -name '*.zip' | head -1)
+          test -n "$ZIP_FILE" || { echo "No ZIP file found"; exit 1; }
+          rm -rf build_project
+          mkdir build_project
+          unzip -q "$ZIP_FILE" -d build_project
+
+      - name: Find project
+        shell: bash
+        run: |
+          PROJECT_DIR=$(find "$GITHUB_WORKSPACE/build_project" -type f -name settings.gradle -print -quit | xargs -r dirname)
+          test -n "$PROJECT_DIR" || { echo "settings.gradle not found"; exit 1; }
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Found project: $PROJECT_DIR"
+
+      - name: Build debug APK
+        run: |
+          cd "$PROJECT_DIR"
+          gradle assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MahzoozMonitor-debug-apk
+          path: '**/app/build/outputs/apk/debug/app-debug.apk'

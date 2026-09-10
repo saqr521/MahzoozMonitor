@@ -24,14 +24,19 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Extract project ZIP
+      - name: Find project
         run: |
-          unzip -q MahzoozMonitor_v1-20_FIXED_displaymetrics.zip
-          cd MahzoozMonitor_v1-20_FIXED_displaymetrics/MahzoozMonitor_Complete
+          PROJECT_DIR=$(find . -type f -name settings.gradle | head -1 | xargs dirname)
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Found project: $PROJECT_DIR"
+
+      - name: Build debug APK
+        run: |
+          cd "$PROJECT_DIR"
           gradle assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: MahzoozMonitor-debug-apk
-          path: MahzoozMonitor_v1-20_FIXED_displaymetrics/MahzoozMonitor_Complete/app/build/outputs/apk/debug/app-debug.apk
+          path: '**/app/build/outputs/apk/debug/app-debug.apk'

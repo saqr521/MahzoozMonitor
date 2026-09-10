@@ -1,9 +1,7 @@
-name: Build Android APK
+name: Build Release APK
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ "main" ]
 
 jobs:
   build:
@@ -19,24 +17,41 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Gradle 8.9
-        uses: gradle/actions/setup-gradle@v6
-        with:
-          gradle-version: '8.9'
-
-      - name: Find project
+      - name: Build Release
         run: |
-          PROJECT_DIR=$(find . -type f -name settings.gradle | head -1 | xargs dirname)
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          echo "Found project: $PROJECT_DIR"
+          chmod +x gradlew
+          ./gradlew assembleRelease
 
-      - name: Build debug APK
+      - name: Create signing key
         run: |
-          cd "$PROJECT_DIR"
-          gradle assembleDebug
+          keytool -genkeypair \
+            -v \
+            -keystore release-key.jks \
+            -alias mahzooz \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass mahzooz123 \
+            -keypass mahzooz123 \
+            -dname "CN=MahzoozMonitor, OU=App, O=Mahzooz, L=Egypt, C=EG"
+
+      - name: Sign APK
+        run: |
+          APK=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
+          ZIPALIGN=$(find "$ANDROID_HOME/build-tools" -name zipalign | sort -V | tail -1)
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
+
+          "$ZIPALIGN" -f 4 "$APK" aligned.apk
+
+          "$APKSIGNER" sign \
+            --ks release-key.jks \
+            --ks-pass pass:mahzooz123 \
+            --key-pass pass:mahzooz123 \
+            --out MahzoozMonitor-release.apk \
+            aligned.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: MahzoozMonitor-debug-apk
-          path: '**/app/build/outputs/apk/debug/app-debug.apk'
+          name: MahzoozMonitor-release
+          path: MahzoozMonitor-release.apk

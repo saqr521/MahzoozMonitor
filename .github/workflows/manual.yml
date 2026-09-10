@@ -49,5 +49,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: name: MahzoozMonitor-release-apk
-          path: '**/app/build/outputs/apk/debug/app-release..apk'
+          name: MahzoozMonitor-release-apk
+          path:**/app/build/outputs/apk/release/**

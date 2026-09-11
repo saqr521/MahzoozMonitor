@@ -1,0 +1,39 @@
+name: Build APK Simple
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Extract project
+        run: |
+          unzip -o MahzoozMonitor-Pro-FIXED-v3.1-source.zip -d project
+          find project -name settings.gradle -o -name settings.gradle.kts
+
+      - name: Build APK
+        run: |
+          cd project/MahzoozMonitor-Pro-source/MahzoozMonitor-Pro
+          gradle --no-daemon :app:assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MahzoozMonitor-Pro-FINAL
+          path: project/MahzoozMonitor-Pro-source/MahzoozMonitor-Pro/app/build/outputs/apk/debug/*.apk

@@ -22,9 +22,9 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Build APK
+      -       - name: Build APK
         run: |
-          unzip -q MahzoozMonitor_v1-20_FIXED_displaymetrics.zip -d project
+          unzip -q *.zip -d project
           PROJECT_DIR=$(dirname "$(find project -name settings.gradle -o -name settings.gradle.kts | head -1)")
           cd "$PROJECT_DIR"
           gradle assembleDebug

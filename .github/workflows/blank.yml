@@ -1,4 +1,4 @@
-name: Build FINAL APK
+name: Build APK
 
 on:
   workflow_dispatch:
@@ -22,18 +22,17 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
-      - name: Extract project
+      - name: Find project
         run: |
-          unzip -o MahzoozMonitor-Pro-FINAL-v3.1.zip -d final_project
+          unzip -o MahzoozMonitor-Pro-FIXED-v3.1-source.zip -d project
+          find project -name settings.gradle -o -name settings.gradle.kts
 
       - name: Build APK
-        working-directory: final_project/MahzoozMonitor-Pro
-        run: |
-          gradle --no-daemon :app:assembleDebug
+        working-directory: project/MahzoozMonitor-Pro
+        run: gradle --no-daemon :app:assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: MahzoozMonitor-FINAL-v3.1
-          path: final_project/MahzoozMonitor-Pro/app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
+          name: MahzoozMonitor-Pro-FINAL
+          path: project/MahzoozMonitor-Pro/app/build/outputs/apk/debug/*.apk

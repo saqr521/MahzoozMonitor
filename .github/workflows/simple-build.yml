@@ -2,57 +2,98 @@ name: Simple Build APK
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ "main" ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: تحميل المشروع
         uses: actions/checkout@v4
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - name: إعداد Java
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.10.2'
-
-      - name: Find and extract Pro source
+      - name: فك المشروع
+        shell: bash
         run: |
-          ZIP=$(find . -maxdepth 2 -type f -name 'MahzoozMonitor-Pro-FIXED*.zip' | head -n 1)
+          set -e
+
+          ZIP=$(find . -maxdepth 2 -type f -name '*.zip' | head -1)
+
           if [ -z "$ZIP" ]; then
-            echo "Pro ZIP not found"
+            echo "❌ لم يتم العثور على ملف ZIP للمشروع"
             exit 1
           fi
 
-          mkdir -p build-source
-          unzip -q "$ZIP" -d build-source
+          echo "ZIP: $ZIP"
 
-          PROJECT_DIR=$(find build-source -type f \( -name 'settings.gradle' -o -name 'settings.gradle.kts' \) -printf '%h\n' | head -n 1)
+          rm -rf project
+          mkdir project
 
-          if [ -z "$PROJECT_DIR" ]; then
-            echo "Gradle project not found"
-            find build-source -maxdepth 4 -type f | head -100
+          unzip -q "$ZIP" -d project
+
+          echo "=== ملفات Gradle ==="
+          find project -type f \( \
+            -name "settings.gradle" -o \
+            -name "settings.gradle.kts" \
+          \) -print
+
+      - name: تحديد مجلد المشروع
+        shell: bash
+        run: |
+          set -e
+
+          SETTINGS=$(find project -type f \( \
+            -name "settings.gradle" -o \
+            -name "settings.gradle.kts" \
+          \) | head -1)
+
+          if [ -z "$SETTINGS" ]; then
+            echo "❌ لم يتم العثور على settings.gradle"
+            echo "محتويات المشروع:"
+            find project -maxdepth 4 -type f | head -200
             exit 1
           fi
+
+          PROJECT_DIR=$(dirname "$SETTINGS")
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          echo "Found project: $PROJECT_DIR"
 
-      - name: Build APK
+          echo "✅ مجلد المشروع: $PROJECT_DIR"
+
+      - name: بناء APK
+        shell: bash
         run: |
-          gradle --no-daemon -p "$PROJECT_DIR" :app:assembleDebug
+          set -e
 
-      - name: Upload APK
+          cd "$PROJECT_DIR"
+
+          echo "=== محتويات المشروع ==="
+          ls -la
+
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            ./gradlew --no-daemon assembleDebug
+          else
+            echo "⚠️ لا يوجد Gradle Wrapper، سيتم استخدام Gradle النظام"
+            gradle --no-daemon assembleDebug
+          fi
+
+      - name: البحث عن APK
+        shell: bash
+        run: |
+          echo "=== APK الناتج ==="
+          find . -type f -name "*.apk" -print
+
+      - name: رفع APK
         uses: actions/upload-artifact@v4
         with:
-          name: MahzoozMonitor-Pro-new-debug
-          path: '**/app/build/outputs/apk/debug/*.apk'
+          name: MahzoozMonitor-Pro-Final
+          path: |
+            **/build/outputs/apk/debug/*.apk
           if-no-files-found: error

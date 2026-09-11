@@ -15,52 +15,43 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Java 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
-          distribution: temurin
+          distribution: 'temurin'
           java-version: '17'
 
       - name: Find and extract project ZIP
         run: |
           ZIP_FILE=$(find . -maxdepth 2 -type f -name "*.zip" | head -n 1)
-
           if [ -z "$ZIP_FILE" ]; then
             echo "ERROR: Project ZIP not found"
             exit 1
           fi
-
           echo "Found: $ZIP_FILE"
-
           mkdir extracted
           unzip -q "$ZIP_FILE" -d extracted
-
-          PROJECT_DIR=$(find extracted -type f -name "settings.gradle.kts" -printf '%h\n' | head -n 1)
-
+          
+          # البحث عن المجلد الذي يحتوي على إعدادات المشروع
+          PROJECT_DIR=$(find extracted -type f \( -name "settings.gradle.kts" -o -name "settings.gradle" \) -printf '%h\n' | head -n 1)
           if [ -z "$PROJECT_DIR" ]; then
-            echo "ERROR: settings.gradle.kts not found"
+            echo "ERROR: settings.gradle(.kts) not found"
             exit 1
           fi
+          echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
 
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          echo "Project directory: $PROJECT_DIR"
-
-      - name: Grant execute permission
-        run: chmod +x "$PROJECT_DIR/gradlew"
+      - name: Grant execute permission for gradlew
+        run: |
+          cd env.PROJECT_DIR 
+          chmod +x gradlew
 
       - name: Build APK
         run: |
-          cd "$PROJECT_DIR"
-          ./gradlew assembleDebug --no-daemon
+          cd env.PROJECT_DIR 
+          ./gradlew assembleDebug
 
-            - name: Prepare APK
-    
-          mkdir -p "$GITHUB_WORKSPACE/apk-output"
-          cp "$PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk" \
-             "$GITHUB_WORKSPACE/apk-output/MahzoozMonitor-Pro.apk"
-
-      - name: Upload APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MahzoozMonitor-Pro-APK
-          path: apk-output/MahzoozMonitor-Pro.apk
-          if-no-files-found: error 
+          name: app-debug
+          path: env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
+          

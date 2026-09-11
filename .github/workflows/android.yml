@@ -22,22 +22,22 @@ jobs:
 
       - name: Find and extract project ZIP
         run: |
-          ZIP_FILE=$(find . -maxdepth 2 -type f -name "*.zip" | head -n 1)
-          if [ -z "$ZIP_FILE" ]; then
+          ZIP_FILE=-find . -maxdepth 2 -type f -name ".zip" | head -n 1
+          if -z "ZIP_FILE" ; then
             echo "ERROR: Project ZIP not found"
             exit 1
           fi
           echo "Found: $ZIP_FILE"
           mkdir extracted
-          unzip -q "$ZIP_FILE" -d extracted
+          unzip -q "ZIP_FILE" -d extracted
           
           # البحث عن المجلد الذي يحتوي على إعدادات المشروع
-          PROJECT_DIR=$(find extracted -type f \( -name "settings.gradle.kts" -o -name "settings.gradle" \) -printf '%h\n' | head -n 1)
-          if [ -z "$PROJECT_DIR" ]; then
+          PROJECT_DIR=(find extracted -type f \( -name "settings.gradle.kts" -o -name "settings.gradle" \) -printf '%h\n' | head -n 1)
+          if [ -z "PROJECT_DIR" ; then
             echo "ERROR: settings.gradle(.kts) not found"
             exit 1
           fi
-          echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
+          echo "PROJECT_DIR=PROJECT_DIR" >> $GITHUB_ENV
 
       - name: Grant execute permission for gradlew
         run: |
@@ -53,5 +53,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
-          path: env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
+          path: env.PROJECT_DIR /app/build/outputs/apk/debug/.apk
           

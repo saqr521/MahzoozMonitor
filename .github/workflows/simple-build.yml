@@ -1,7 +1,9 @@
-name: Build APK Simple
+name: Simple Build APK
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ "main" ]
 
 jobs:
   build:
@@ -22,18 +24,35 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
-      - name: Extract project
+      - name: Find and extract Pro source
         run: |
-          unzip -o MahzoozMonitor-Pro-FIXED-v3.1-source.zip -d project
-          find project -name settings.gradle -o -name settings.gradle.kts
+          ZIP=$(find . -maxdepth 2 -type f -name 'MahzoozMonitor-Pro-FIXED*.zip' | head -n 1)
+          if [ -z "$ZIP" ]; then
+            echo "Pro ZIP not found"
+            exit 1
+          fi
+
+          mkdir -p build-source
+          unzip -q "$ZIP" -d build-source
+
+          PROJECT_DIR=$(find build-source -type f \( -name 'settings.gradle' -o -name 'settings.gradle.kts' \) -printf '%h\n' | head -n 1)
+
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "Gradle project not found"
+            find build-source -maxdepth 4 -type f | head -100
+            exit 1
+          fi
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Found project: $PROJECT_DIR"
 
       - name: Build APK
         run: |
-          cd project/MahzoozMonitor-Pro-source/MahzoozMonitor-Pro
-          gradle --no-daemon :app:assembleDebug
+          gradle --no-daemon -p "$PROJECT_DIR" :app:assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: MahzoozMonitor-Pro-FINAL
-          path: project/MahzoozMonitor-Pro-source/MahzoozMonitor-Pro/app/build/outputs/apk/debug/*.apk
+          name: MahzoozMonitor-Pro-new-debug
+          path: '**/app/build/outputs/apk/debug/*.apk'
+          if-no-files-found: error

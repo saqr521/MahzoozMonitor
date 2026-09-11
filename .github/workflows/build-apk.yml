@@ -1,4 +1,4 @@
-name: Build APK
+name: Simple Build APK
 
 on:
   workflow_dispatch:
@@ -8,33 +8,92 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - name: تحميل المشروع
+        uses: actions/checkout@v4
 
-      - name: Setup Java 17
+      - name: إعداد Java
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
-        with:
-          gradle-version: '8.9'
-
-      - name: Extract project
+      - name: فك المشروع
+        shell: bash
         run: |
-          unzip -q *.zip -d project
-          PROJECT_DIR=$(find project -type f \( -name settings.gradle -o -name settings.gradle.kts \) -print -quit | xargs -r dirname)
-          test -n "$PROJECT_DIR"
+          set -e
+
+          ZIP=$(find . -maxdepth 2 -type f -name '*.zip' | head -1)
+
+          if [ -z "$ZIP" ]; then
+            echo "❌ لم يتم العثور على ملف ZIP للمشروع"
+            exit 1
+          fi
+
+          echo "ZIP: $ZIP"
+
+          rm -rf project
+          mkdir project
+
+          unzip -q "$ZIP" -d project
+
+          echo "=== ملفات Gradle ==="
+          find project -type f \( \
+            -name "settings.gradle" -o \
+            -name "settings.gradle.kts" \
+          \) -print
+
+      - name: تحديد مجلد المشروع
+        shell: bash
+        run: |
+          set -e
+
+          SETTINGS=$(find project -type f \( \
+            -name "settings.gradle" -o \
+            -name "settings.gradle.kts" \
+          \) | head -1)
+
+          if [ -z "$SETTINGS" ]; then
+            echo "❌ لم يتم العثور على settings.gradle"
+            echo "محتويات المشروع:"
+            find project -maxdepth 4 -type f | head -200
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$SETTINGS")
+
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
-      - name: Build APK
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: gradle assembleDebug
+          echo "✅ مجلد المشروع: $PROJECT_DIR"
 
-      - name: Upload APK
+      - name: بناء APK
+        shell: bash
+        run: |
+          set -e
+
+          cd "$PROJECT_DIR"
+
+          echo "=== محتويات المشروع ==="
+          ls -la
+
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            ./gradlew --no-daemon assembleDebug
+          else
+            echo "⚠️ لا يوجد Gradle Wrapper، سيتم استخدام Gradle النظام"
+            gradle --no-daemon assembleDebug
+          fi
+
+      - name: البحث عن APK
+        shell: bash
+        run: |
+          echo "=== APK الناتج ==="
+          find . -type f -name "*.apk" -print
+
+      - name: رفع APK
         uses: actions/upload-artifact@v4
         with:
-          name: MahzoozMonitor-debug-apk
-          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/app-debug.apk
+          name: MahzoozMonitor-Pro-Final
+          path: |
+            **/build/outputs/apk/debug/*.apk
+          if-no-files-found: error

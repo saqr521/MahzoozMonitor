@@ -1,60 +1,312 @@
-name: Build APK - الإصدار 4
+package com.mahzooz.monitor;
 
-on:
-  workflow_dispatch:
-  push:
-    branches:
-      - main
-      - master
+import android.content.Context;
+import android.graphics.Rect;
+import android.graphics.Bitmap;
+import java.util.*;
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
+public class Analyzer {
+    private final TemplateRepository templates;
+    private final HistoryDb db;
+    private long lastFrameHash = 0;
+    private String lastGreenSignature = "";
 
-    steps:
-      - name: تحميل المشروع
-        uses: actions/checkout@v4
+    public Analyzer(Context c){
+        templates = new TemplateRepository(c);
+        db = new HistoryDb(c);
+    }
 
-      - name: إعداد Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
+    public synchronized AnalysisResult analyze(Bitmap bmp){
+        List<Detector.Marker> g = Detector.findMarkers(bmp, true);
+        List<Detector.Marker> y = Detector.findMarkers(bmp, false);
+        sortMarkers(g);
+        sortMarkers(y);
 
-      - name: استخراج المشروع
-        shell: bash
-        run: |
-          mkdir -p final_project
-          ZIP_FILE=$(find . -maxdepth 1 -type f -name "*.zip" | head -n 1)
+        List<Detector.Tile> tiles =
+                Detector.findTiles(bmp, templates);
 
-          if [ -z "$ZIP_FILE" ]; then
-            echo "لم يتم العثور على ملف ZIP"
-            exit 1
-          fi
+        List<Detector.Tile> greenItems =
+                attachMarkersToTiles(g, tiles, bmp, templates);
 
-          echo "ملف المشروع: $ZIP_FILE"
-          unzip -o "$ZIP_FILE" -d final_project
+        List<Detector.Tile> yellowItems =
+                attachMarkersToTiles(y, tiles, bmp, templates);
 
-      - name: العثور على Gradle وتشغيل البناء
-        shell: bash
-        run: |
-          GRADLEW=$(find final_project -type f -name "gradlew" | head -n 1)
+        for(int i = 0; i < greenItems.size(); i++)
+            if(greenItems.get(i).label.equals("غير معروف"))
+                greenItems.set(i,
+                        Detector.itemForMarker(bmp, g.get(i), templates));
 
-          if [ -z "$GRADLEW" ]; then
-            echo "لم يتم العثور على gradlew"
-            exit 1
-          fi
+        for(int i = 0; i < yellowItems.size(); i++)
+            if(yellowItems.get(i).label.equals("غير معروف"))
+                yellowItems.set(i,
+                        Detector.itemForMarker(bmp, y.get(i), templates));
 
-          PROJECT_DIR=$(dirname "$GRADLEW")
-          cd "$PROJECT_DIR"
+        List<String> relations =
+                buildRelations(greenItems, yellowItems);
 
-          chmod +x gradlew
-          ./gradlew --no-daemon :app:assembleDebug
+        String current = signature(greenItems);
 
-      - name: رفع ملف APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: MahzoozMonitor-FINAL-v4-APK
-          path: |
-            final_project/**/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
+        String recommendation =
+                updateAndRecommend(lastGreenSignature, current);
+
+        lastGreenSignature = current;
+
+        long screenHash = Detector.phash(
+                bmp,
+                new Rect(0, 0, bmp.getWidth(), bmp.getHeight())
+        );
+
+        String change =
+                lastFrameHash == 0
+                        ? "بدء الرصد"
+                        : (Long.bitCount(screenHash ^ lastFrameHash) > 10
+                        ? "تغير ملحوظ في الشاشة"
+                        : "");
+
+        lastFrameHash = screenHash;
+
+        float confidence = .35f;
+
+        if(!g.isEmpty() || !y.isEmpty())
+            confidence += .20f;
+
+        if(!tiles.isEmpty())
+            confidence += .15f;
+
+        if(!relations.isEmpty())
+            confidence += .15f;
+
+        if(!recommendation.isEmpty())
+            confidence += .05f;
+
+        return new AnalysisResult(
+                System.currentTimeMillis(),
+                g,
+                y,
+                tiles,
+                relations,
+                recommendation,
+                change,
+                Math.min(1f, confidence)
+        );
+    }
+
+    private static void sortMarkers(List<Detector.Marker> a){
+        Collections.sort(a, (x, z) -> {
+            int d = Integer.compare(
+                    x.rect.top,
+                    z.rect.top
+            );
+
+            return d != 0
+                    ? d
+                    : Integer.compare(
+                            x.rect.left,
+                            z.rect.left
+                    );
+        });
+    }
+
+    private List<Detector.Tile> attachMarkersToTiles(
+            List<Detector.Marker> markers,
+            List<Detector.Tile> tiles,
+            Bitmap bmp,
+            TemplateRepository repo){
+
+        ArrayList<Detector.Tile> out = new ArrayList<>();
+        Set<Integer> used = new HashSet<>();
+
+        for(Detector.Marker m : markers){
+            double best = Double.MAX_VALUE;
+            int bi = -1;
+
+            double mx =
+                    (m.rect.left + m.rect.right) / 2.0;
+
+            double my =
+                    (m.rect.top + m.rect.bottom) / 2.0;
+
+            for(int i = 0; i < tiles.size(); i++)
+                if(!used.contains(i)){
+
+                    Rect r = tiles.get(i).rect;
+
+                    double tx =
+                            (r.left + r.right) / 2.0;
+
+                    double ty =
+                            (r.top + r.bottom) / 2.0;
+
+                    double dx = mx - tx;
+                    double dy = my - ty;
+
+                    double d = Math.hypot(dx, dy);
+
+                    if(d < best
+                            && dy > -r.height() * 0.75
+                            && dy < r.height() * 0.75){
+
+                        best = d;
+                        bi = i;
+                    }
+                }
+
+            if(bi >= 0
+                    && best < Math.max(
+                            bmp.getWidth() / 4.0,
+                            120)){
+
+                used.add(bi);
+                out.add(tiles.get(bi));
+
+            }else{
+                out.add(
+                        new Detector.Tile(
+                                new Rect(),
+                                0,
+                                "غير معروف",
+                                0
+                        )
+                );
+            }
+        }
+
+        return out;
+    }
+
+    private List<String> buildRelations(
+            List<Detector.Tile> green,
+            List<Detector.Tile> yellow){
+
+        ArrayList<String> out = new ArrayList<>();
+
+        for(Detector.Tile g : green){
+
+            if(g.label.equals("غير معروف"))
+                continue;
+
+            Detector.Tile best = null;
+            double bd = Double.MAX_VALUE;
+
+            for(Detector.Tile y : yellow){
+
+                if(y.label.equals("غير معروف"))
+                    continue;
+
+                double d =
+                        centerDistance(g.rect, y.rect);
+
+                if(d < bd){
+                    bd = d;
+                    best = y;
+                }
+            }
+
+            if(best != null && bd < 260){
+
+                String rel =
+                        "🟩 " + g.label +
+                        " ← 🟨 " + best.label;
+
+                out.add(rel);
+
+                db.observeRelation(
+                        g.label,
+                        best.label
+                );
+            }
+        }
+
+        return out;
+    }
+
+    private String signature(List<Detector.Tile> items){
+
+        StringBuilder s = new StringBuilder();
+
+        // التصحيح المهم: إضافة :items هنا
+        for(Detector.Tile t : items)
+            if(!t.label.equals("غير معروف"))
+                s.append(t.label).append(';');
+
+        return s.toString();
+    }
+
+    private String updateAndRecommend(
+            String previous,
+            String current){
+
+        if(previous == null
+                || previous.isEmpty()
+                || current.isEmpty()
+                || previous.equals(current))
+            return "";
+
+        String[] now = current.split(";");
+
+        String next =
+                now.length > 0
+                        ? now[0]
+                        : "";
+
+        if(next.isEmpty())
+            return "";
+
+        int total =
+                db.observeTransition(
+                        previous,
+                        next
+                );
+
+        int best =
+                db.bestTransitionCount(previous);
+
+        if(best <= 0)
+            return "";
+
+        int pct =
+                Math.round(
+                        100f * best / Math.max(1, total)
+                );
+
+        return "الخطوة التالية المرصودة: "
+                + next
+                + " — "
+                + pct
+                + "% من السجل (ليست ضمانًا لنتيجة عشوائية)";
+    }
+
+    private static double centerDistance(
+            Rect a,
+            Rect b){
+
+        double ax =
+                (a.left + a.right) / 2.0;
+
+        double ay =
+                (a.top + a.bottom) / 2.0;
+
+        double bx =
+                (b.left + b.right) / 2.0;
+
+        double by =
+                (b.top + b.bottom) / 2.0;
+
+        return Math.hypot(
+                ax - bx,
+                ay - by
+        );
+    }
+
+    public void save(AnalysisResult r){
+        db.add(r);
+    }
+
+    public TemplateRepository templates(){
+        return templates;
+    }
+
+    public HistoryDb db(){
+        return db;
+    }
+}

@@ -16,89 +16,54 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
 
-      - name: فك المشروع
-        shell: bash
+      - name: فك ملف المشروع
         run: |
-          set -e
+          unzip -q MahzoozMonitor-Pro-FIXED-v3.1-source.zip -d project
 
-          ZIP=$(find . -type f -name "*.zip" -not -path "./.git/*" | head -1)
+          echo "=== البحث عن ملفات Gradle ==="
+          find project -type f \( \
+            -name "settings.gradle" -o \
+            -name "settings.gradle.kts" \
+          \) -print
 
-          if [ -z "$ZIP" ]; then
-            echo "❌ لم يتم العثور على ملف ZIP"
-            exit 1
-          fi
-
-          echo "📦 الملف: $ZIP"
-
-          rm -rf project
-          mkdir project
-          unzip -q "$ZIP" -d project
-
-          echo "=== بنية المشروع ==="
-          find project -maxdepth 5 -type f \
-            \( -name "gradlew" -o -name "settings.gradle" -o -name "settings.gradle.kts" -o -name "settings.gradle.dcl" -o -name "build.gradle" -o -name "build.gradle.kts" \) \
-            -print
-
-      - name: تحديد جذر Gradle
-        shell: bash
-        run: |
-          set -e
-
-          ROOT=""
-
-          WRAPPER=$(find project -type f -name "gradlew" | head -1)
-
-          if [ -n "$WRAPPER" ]; then
-            ROOT=$(dirname "$WRAPPER")
-          else
-            SETTINGS=$(find project -type f \
-              \( -name "settings.gradle" -o -name "settings.gradle.kts" -o -name "settings.gradle.dcl" \) \
-              | head -1)
-
-            if [ -n "$SETTINGS" ]; then
-              ROOT=$(dirname "$SETTINGS")
-            fi
-          fi
-
-          if [ -z "$ROOT" ]; then
-            echo "❌ لم أجد جذر مشروع Gradle"
-            exit 1
-          fi
-
-          echo "✅ جذر Gradle: $ROOT"
-          echo "ROOT=$ROOT" >> "$GITHUB_ENV"
+      - name: إعداد Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
 
       - name: بناء APK
-        shell: bash
         run: |
-          set -e
+          echo "=== البحث عن جذر مشروع Gradle ==="
 
-          cd "$ROOT"
+          SETTINGS=$(find project -type f \( \
+            -name "settings.gradle" -o \
+            -name "settings.gradle.kts" \
+          \) -print -quit)
 
-          echo "=== داخل ==="
-          pwd
-
-          echo "=== الملفات ==="
-          ls -la
-
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-            ./gradlew --no-daemon assembleDebug
-          else
-            gradle --no-daemon assembleDebug
+          if [ -z "$SETTINGS" ]; then
+            echo "❌ لم يتم العثور على settings.gradle"
+            echo "=== محتويات المشروع ==="
+            find project -maxdepth 5 -type f | head -200
+            exit 1
           fi
 
-      - name: البحث عن APK
-        shell: bash
-        run: |
-          echo "=== APK ==="
-          find . -type f -name "*.apk" -print
+          PROJECT=$(dirname "$SETTINGS")
+
+          echo "✅ جذر Gradle: $PROJECT"
+
+          cd "$PROJECT"
+
+          echo "=== ملفات جذر المشروع ==="
+          ls -la
+
+          echo "=== تشغيل Gradle ==="
+          gradle --no-daemon assembleDebug
 
       - name: رفع APK
         uses: actions/upload-artifact@v4
         with:
           name: MahzoozMonitor-Pro-Final
-          path: |
-            **/build/outputs/apk/debug/*.apk
+          path: project/**/build/outputs/apk/debug/*.apk
           if-no-files-found: error

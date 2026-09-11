@@ -24,8 +24,10 @@ jobs:
 
       - name: Build APK
         run: |
+          unzip -q MahzoozMonitor_v1-20_FIXED_displaymetrics.zip -d project
+          PROJECT_DIR=$(dirname "$(find project -name settings.gradle -o -name settings.gradle.kts | head -1)")
+          cd "$PROJECT_DIR"
           gradle assembleDebug
-
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:

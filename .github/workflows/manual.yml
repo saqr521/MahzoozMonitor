@@ -2,6 +2,9 @@ name: Build APK
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   build:
@@ -9,51 +12,134 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Setup Java
+      - name: Setup Java 17
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
-          cache: gradle
+
+      - name: Setup Android
+        uses: android-actions/setup-android@v4
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.10.2'
+        uses: gradle/actions/setup-gradle@v6
 
-      - name: Find Gradle project
+      - name: Find Android project
+        shell: bash
         run: |
-          echo "Searching for Gradle project..."
+          set -e
+
+          echo "Searching for Android Gradle project..."
 
           SETTINGS=$(find . -type f \( \
             -name "settings.gradle" -o \
-            -name "settings.gradle.kts" \
-          \) -print -quit)
+            -name "settings.gradle.kts" -o \
+            -name "settings.gradle.dcl" \
+          \) \
+          -not -path "./.git/*" \
+          -not -path "./_extracted/*" \
+          -print -quit)
 
           if [ -z "$SETTINGS" ]; then
-            echo "ERROR: settings.gradle not found"
-            echo "=== Project files ==="
-            find . -maxdepth 5 -type f | head -200
+            echo "No Gradle project found in repository."
+            echo "Checking for ZIP files..."
+
+            mkdir -p _extracted
+
+            FOUND_ZIP=false
+
+            while IFS= read -r ZIP; do
+              echo "Extracting: $ZIP"
+              unzip -q -o "$ZIP" -d _extracted
+              FOUND_ZIP=true
+            done < <(find . -maxdepth 3 -type f -name "*.zip" -not -path "./.git/*")
+
+            if [ "$FOUND_ZIP" = true ]; then
+              SETTINGS=$(find ./_extracted -type f \( \
+                -name "settings.gradle" -o \
+                -name "settings.gradle.kts" -o \
+                -name "settings.gradle.dcl" \
+              \) -print -quit)
+            fi
+          fi
+
+          if [ -z "$SETTINGS" ]; then
+            echo "ERROR: Android Gradle project was not found."
+            echo ""
+            echo "Repository files:"
+            find . -maxdepth 5 -type f | sort
             exit 1
           fi
 
-          PROJECT=$(dirname "$SETTINGS")
+          PROJECT_DIR=$(dirname "$SETTINGS")
 
-          echo "Gradle project: $PROJECT"
+          echo "======================================"
+          echo "Gradle project found:"
+          echo "$PROJECT_DIR"
+          echo "======================================"
 
-          cd "$PROJECT"
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
-          echo "=== Project files ==="
+      - name: Show project
+        shell: bash
+        run: |
+          echo "Project directory:"
+          echo "$PROJECT_DIR"
+          echo ""
+          find "$PROJECT_DIR" -maxdepth 3 -type f | sort
+
+      - name: Build APK
+        shell: bash
+        run: |
+          set -e
+
+          cd "$PROJECT_DIR"
+
+          echo "Building from:"
+          pwd
+
+          echo "Files:"
           ls -la
 
-          echo "=== Building APK ==="
-          gradle --no-daemon :app:assembleDebug
+          if [ -f "./gradlew" ]; then
+            echo "Using Gradle Wrapper"
+            chmod +x ./gradlew
+            ./gradlew --no-daemon assembleDebug
+          else
+            echo "Using installed Gradle"
+            gradle --no-daemon assembleDebug
+          fi
+
+      - name: Find APK
+        shell: bash
+        run: |
+          set -e
+
+          echo "Searching for generated APK..."
+
+          find "$PROJECT_DIR" -type f -name "*.apk" -print
+
+          APK=$(find "$PROJECT_DIR" -type f -name "*-debug.apk" -print -quit)
+
+          if [ -z "$APK" ]; then
+            APK=$(find "$PROJECT_DIR" -type f -name "*.apk" -print -quit)
+          fi
+
+          if [ -z "$APK" ]; then
+            echo "ERROR: No APK was generated."
+            exit 1
+          fi
+
+          echo "APK found:"
+          echo "$APK"
+
+          echo "APK_PATH=$APK" >> "$GITHUB_ENV"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: MahzoozMonitor-Pro-Final
-          path: '**/app/build/outputs/apk/debug/*.apk'
+          name: MahzoozMonitor-debug-apk
+          path: ${{ env.APK_PATH }}
           if-no-files-found: error

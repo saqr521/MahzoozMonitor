@@ -26,90 +26,74 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      - name: Create Kotlin fix
+        shell: bash
+        run: |
+          cat > "$HOME/kotlin-fix.gradle" <<'EOF'
+          allprojects {
+              configurations.configureEach {
+                  resolutionStrategy {
+                      force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
+                      force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22'
+                      force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22'
+                  }
+              }
+          }
+          EOF
+
       - name: Find Android project
         shell: bash
         run: |
           set -e
 
-          echo "Searching for Android Gradle project..."
-
           SETTINGS=$(find . -type f \( \
             -name "settings.gradle" -o \
             -name "settings.gradle.kts" -o \
             -name "settings.gradle.dcl" \
-          \) \
-          -not -path "./.git/*" \
-          -not -path "./_extracted/*" \
-          -print -quit)
+          \) -not -path "./.git/*" -print -quit)
 
           if [ -z "$SETTINGS" ]; then
-            echo "No Gradle project found in repository."
-            echo "Checking for ZIP files..."
-
             mkdir -p _extracted
 
-            FOUND_ZIP=false
-
             while IFS= read -r ZIP; do
-              echo "Extracting: $ZIP"
+              echo "Extracting $ZIP"
               unzip -q -o "$ZIP" -d _extracted
-              FOUND_ZIP=true
             done < <(find . -maxdepth 3 -type f -name "*.zip" -not -path "./.git/*")
 
-            if [ "$FOUND_ZIP" = true ]; then
-              SETTINGS=$(find ./_extracted -type f \( \
-                -name "settings.gradle" -o \
-                -name "settings.gradle.kts" -o \
-                -name "settings.gradle.dcl" \
-              \) -print -quit)
-            fi
+            SETTINGS=$(find ./_extracted -type f \( \
+              -name "settings.gradle" -o \
+              -name "settings.gradle.kts" -o \
+              -name "settings.gradle.dcl" \
+            \) -print -quit)
           fi
 
           if [ -z "$SETTINGS" ]; then
-            echo "ERROR: Android Gradle project was not found."
-            echo ""
-            echo "Repository files:"
-            find . -maxdepth 5 -type f | sort
+            echo "ERROR: Android Gradle project not found."
             exit 1
           fi
 
           PROJECT_DIR=$(dirname "$SETTINGS")
-
-          echo "======================================"
-          echo "Gradle project found:"
-          echo "$PROJECT_DIR"
-          echo "======================================"
-
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
-      - name: Show project
-        shell: bash
-        run: |
-          echo "Project directory:"
-          echo "$PROJECT_DIR"
-          echo ""
-          find "$PROJECT_DIR" -maxdepth 3 -type f | sort
+          echo "Project found at: $PROJECT_DIR"
 
       - name: Build APK
         shell: bash
         run: |
           set -e
-
           cd "$PROJECT_DIR"
 
-          echo "Building from:"
-          pwd
-
-          echo "Files:"
-          ls -la
-
           if [ -f "./gradlew" ]; then
-            echo "Using Gradle Wrapper"
             chmod +x ./gradlew
-            ./gradlew --no-daemon assembleDebug
+            ./gradlew \
+              --no-daemon \
+              --init-script "$HOME/kotlin-fix.gradle" \
+              assembleDebug
           else
-            echo "Using installed Gradle"
-            gradle --no-daemon assembleDebug
+            gradle \
+              --no-daemon \
+              --init-script "$HOME/kotlin-fix.gradle" \
+              assembleDebug
           fi
 
       - name: Find APK
@@ -117,7 +101,7 @@ jobs:
         run: |
           set -e
 
-          echo "Searching for generated APK..."
+          echo "Searching for APK..."
 
           find "$PROJECT_DIR" -type f -name "*.apk" -print
 
@@ -128,13 +112,11 @@ jobs:
           fi
 
           if [ -z "$APK" ]; then
-            echo "ERROR: No APK was generated."
+            echo "ERROR: APK was not generated."
             exit 1
           fi
 
-          echo "APK found:"
-          echo "$APK"
-
+          echo "APK found: $APK"
           echo "APK_PATH=$APK" >> "$GITHUB_ENV"
 
       - name: Upload APK

@@ -1,5 +1,3 @@
-name: Build Mahzooz v35 APK
-
 on:
   workflow_dispatch:
   push:
@@ -18,27 +16,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Find v35 Project ZIP
+      - name: Find Project ZIP
         shell: bash
         run: |
           set -e
 
-          ZIP_FILE="./MahzoozMonitor-v35-Program-Center-FINAL-GitHub-FIXED.zip"
+          ZIP_FILE=$(find . -maxdepth 1 -type f -name "*.zip" -print -quit)
 
-          if [ ! -f "$ZIP_FILE" ]; then
-            echo "ERROR: v35 ZIP not found:"
-            echo "$ZIP_FILE"
+          if [ -z "$ZIP_FILE" ]; then
+            echo "ERROR: No project ZIP found in repository root"
             echo "ZIP files in repository:"
             find . -maxdepth 1 -type f -name "*.zip" -print
             exit 1
           fi
 
-          echo "Found v35:"
+          echo "Found project ZIP:"
           ls -lh "$ZIP_FILE"
 
           echo "ZIP_FILE=$ZIP_FILE" >> "$GITHUB_ENV"
 
-      - name: Extract v35 Project
+      - name: Extract Project
         shell: bash
         run: |
           set -e
@@ -51,7 +48,7 @@ jobs:
           GRADLEW=$(find project -type f -name "gradlew" -print -quit)
 
           if [ -z "$GRADLEW" ]; then
-            echo "ERROR: gradlew was not found inside v35 ZIP"
+            echo "ERROR: gradlew was not found inside project ZIP"
             find project -maxdepth 5 -type f | head -300
             exit 1
           fi

@@ -1,4 +1,4 @@
-name: Build APK
+name: Build Mahzooz v35 APK
 
 on:
   workflow_dispatch:
@@ -18,22 +18,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Find project ZIP
+      - name: Find v35 Project ZIP
         shell: bash
         run: |
           set -e
 
-          ZIP_FILE=$(find . -maxdepth 1 -type f -name "*.zip" | head -n 1)
+          ZIP_FILE="./MahzoozMonitor-v35-Program-Center-FINAL-GitHub-FIXED.zip"
 
-          if [ -z "$ZIP_FILE" ]; then
-            echo "No project ZIP found"
+          if [ ! -f "$ZIP_FILE" ]; then
+            echo "ERROR: v35 ZIP not found:"
+            echo "$ZIP_FILE"
+            echo "ZIP files in repository:"
+            find . -maxdepth 1 -type f -name "*.zip" -print
             exit 1
           fi
 
-          echo "Found ZIP: $ZIP_FILE"
+          echo "Found v35:"
+          ls -lh "$ZIP_FILE"
+
           echo "ZIP_FILE=$ZIP_FILE" >> "$GITHUB_ENV"
 
-      - name: Extract project
+      - name: Extract v35 Project
         shell: bash
         run: |
           set -e
@@ -43,30 +48,21 @@ jobs:
 
           unzip -q "$ZIP_FILE" -d project
 
-          GRADLEW=$(find project -type f -name "gradlew" | head -n 1)
+          GRADLEW=$(find project -type f -name "gradlew" -print -quit)
 
           if [ -z "$GRADLEW" ]; then
-            echo "gradlew not found inside ZIP"
-            find project -maxdepth 4 -type f | head -200
+            echo "ERROR: gradlew was not found inside v35 ZIP"
+            find project -maxdepth 5 -type f | head -300
             exit 1
           fi
 
           PROJECT_DIR=$(dirname "$GRADLEW")
 
-          echo "Gradle wrapper: $GRADLEW"
-          echo "Project directory: $PROJECT_DIR"
+          echo "Gradle wrapper found:"
+          echo "$GRADLEW"
 
-          WRAPPER_PROPERTIES="$PROJECT_DIR/gradle/wrapper/gradle-wrapper.properties"
-
-          if [ ! -f "$WRAPPER_PROPERTIES" ]; then
-            echo "gradle-wrapper.properties not found"
-            exit 1
-          fi
-
-          sed -i 's/^distributionSha256Sum=.*/distributionSha256Sum=31c55713e40233a8303827ceb42ca48a47267a0ad4bab9177123121e71524c26/' "$WRAPPER_PROPERTIES"
-
-          echo "Updated Gradle distribution checksum:"
-          grep '^distributionSha256Sum=' "$WRAPPER_PROPERTIES"
+          echo "Project directory:"
+          echo "$PROJECT_DIR"
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
@@ -77,18 +73,31 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK 35
+      - name: Prepare Android SDK
         shell: bash
         run: |
           set -e
 
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+          SDK_DIR="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
 
-      - name: Check Gradle
+          echo "Android SDK:"
+          echo "$SDK_DIR"
+
+          if [ ! -d "$SDK_DIR" ]; then
+            echo "ERROR: Android SDK directory not found"
+            exit 1
+          fi
+
+          echo "ANDROID_SDK_ROOT=$SDK_DIR" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$SDK_DIR" >> "$GITHUB_ENV"
+
+          echo "Installed Android platforms:"
+          ls -1 "$SDK_DIR/platforms" 2>/dev/null || true
+
+          echo "Installed build tools:"
+          ls -1 "$SDK_DIR/build-tools" 2>/dev/null || true
+
+      - name: Check Gradle Wrapper
         shell: bash
         run: |
           set -e
@@ -97,7 +106,8 @@ jobs:
 
           chmod +x ./gradlew
 
-          ./gradlew --no-daemon --stacktrace tasks --all
+          echo "Gradle wrapper:"
+          ./gradlew --version
 
       - name: Build APK
         shell: bash
@@ -120,15 +130,18 @@ jobs:
           APK="$PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk"
 
           if [ ! -f "$APK" ]; then
-            echo "APK was not generated"
+            echo "ERROR: APK was not generated"
+
+            echo "Available output files:"
             find "$PROJECT_DIR/app/build/outputs" -type f 2>/dev/null || true
+
             exit 1
           fi
 
-          echo "APK found:"
+          echo "APK successfully generated:"
           ls -lh "$APK"
 
-      - name: Prepare APK
+      - name: Prepare Final APK
         shell: bash
         run: |
           set -e
@@ -136,11 +149,11 @@ jobs:
           mkdir -p output
 
           cp "$PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk" \
-             output/Mahzooz-debug.apk
+            output/Mahzooz-debug.apk
 
           ls -lh output/Mahzooz-debug.apk
 
-      - name: Upload APK
+      - name: Upload Final APK
         uses: actions/upload-artifact@v4
         with:
           name: Mahzooz-debug-apk

@@ -1,8 +1,10 @@
+name: Build Mahzooz v45
+
 on:
   workflow_dispatch:
   push:
     paths:
-      - "*.zip"
+      - "MahzoozMonitor-v45-Live-Grid-Reader.zip"
       - ".github/workflows/build.yml"
 
 permissions:
@@ -16,26 +18,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Find Project ZIP
+      - name: Find v45 Project ZIP
         shell: bash
         run: |
           set -e
 
-          ZIP_FILE=$(find . -maxdepth 1 -type f -name "*.zip" -print -quit)
+          ZIP_FILE="./MahzoozMonitor-v45-Live-Grid-Reader.zip"
 
-          if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: No project ZIP found in repository root"
+          if [ ! -f "$ZIP_FILE" ]; then
+            echo "ERROR: v45 project ZIP was not found:"
+            echo "$ZIP_FILE"
+            echo ""
             echo "ZIP files in repository:"
             find . -maxdepth 1 -type f -name "*.zip" -print
             exit 1
           fi
 
-          echo "Found project ZIP:"
+          echo "Found v45 project ZIP:"
           ls -lh "$ZIP_FILE"
 
           echo "ZIP_FILE=$ZIP_FILE" >> "$GITHUB_ENV"
 
-      - name: Extract Project
+      - name: Extract v45 Project
         shell: bash
         run: |
           set -e
@@ -48,17 +52,17 @@ jobs:
           GRADLEW=$(find project -type f -name "gradlew" -print -quit)
 
           if [ -z "$GRADLEW" ]; then
-            echo "ERROR: gradlew was not found inside project ZIP"
-            find project -maxdepth 5 -type f | head -300
+            echo "ERROR: gradlew was not found inside the v45 project ZIP"
+            find project -maxdepth 6 -type f | head -300
             exit 1
           fi
 
           PROJECT_DIR=$(dirname "$GRADLEW")
 
-          echo "Gradle wrapper found:"
+          echo "v45 Gradle wrapper:"
           echo "$GRADLEW"
 
-          echo "Project directory:"
+          echo "v45 Project directory:"
           echo "$PROJECT_DIR"
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
@@ -88,13 +92,15 @@ jobs:
           echo "ANDROID_SDK_ROOT=$SDK_DIR" >> "$GITHUB_ENV"
           echo "ANDROID_HOME=$SDK_DIR" >> "$GITHUB_ENV"
 
+          echo ""
           echo "Installed Android platforms:"
           ls -1 "$SDK_DIR/platforms" 2>/dev/null || true
 
+          echo ""
           echo "Installed build tools:"
           ls -1 "$SDK_DIR/build-tools" 2>/dev/null || true
 
-      - name: Check Gradle Wrapper
+      - name: Check v45 Gradle Wrapper
         shell: bash
         run: |
           set -e
@@ -103,10 +109,10 @@ jobs:
 
           chmod +x ./gradlew
 
-          echo "Gradle wrapper:"
+          echo "Gradle wrapper version:"
           ./gradlew --version
 
-      - name: Build APK
+      - name: Build Mahzooz v45 APK
         shell: bash
         run: |
           set -e
@@ -115,11 +121,12 @@ jobs:
 
           chmod +x ./gradlew
 
+          echo "Building Mahzooz v45..."
           ./gradlew clean assembleDebug \
             --no-daemon \
             --stacktrace
 
-      - name: Verify APK
+      - name: Verify v45 APK
         shell: bash
         run: |
           set -e
@@ -127,18 +134,19 @@ jobs:
           APK="$PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk"
 
           if [ ! -f "$APK" ]; then
-            echo "ERROR: APK was not generated"
+            echo "ERROR: Mahzooz v45 APK was not generated"
 
+            echo ""
             echo "Available output files:"
             find "$PROJECT_DIR/app/build/outputs" -type f 2>/dev/null || true
 
             exit 1
           fi
 
-          echo "APK successfully generated:"
+          echo "Mahzooz v45 APK successfully generated:"
           ls -lh "$APK"
 
-      - name: Prepare Final APK
+      - name: Prepare Final v45 APK
         shell: bash
         run: |
           set -e
@@ -146,13 +154,14 @@ jobs:
           mkdir -p output
 
           cp "$PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk" \
-            output/Mahzooz-debug.apk
+            output/MahzoozMonitor-Pro-v45-debug.apk
 
-          ls -lh output/Mahzooz-debug.apk
+          echo "Final APK:"
+          ls -lh output/MahzoozMonitor-Pro-v45-debug.apk
 
-      - name: Upload Final APK
+      - name: Upload Mahzooz v45 APK
         uses: actions/upload-artifact@v4
         with:
-          name: Mahzooz-debug-apk
-          path: output/Mahzooz-debug.apk
+          name: MahzoozMonitor-Pro-v45-debug
+          path: output/MahzoozMonitor-Pro-v45-debug.apk
           if-no-files-found: error

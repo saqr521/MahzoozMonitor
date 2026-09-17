@@ -1,10 +1,10 @@
-name: Build Mahzooz v45
+name: Build Mahzooz
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - "MahzoozMonitor-v45-Live-Grid-Reader.zip"
+      - "Mahzooz.zip"
       - ".github/workflows/build.yml"
 
 permissions:
@@ -18,15 +18,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Find v45 Project ZIP
+      - name: Find Mahzooz Project ZIP
         shell: bash
         run: |
           set -e
 
-          ZIP_FILE="./MahzoozMonitor-v45-Live-Grid-Reader.zip"
+          ZIP_FILE="./Mahzooz.zip"
 
           if [ ! -f "$ZIP_FILE" ]; then
-            echo "ERROR: v45 project ZIP was not found:"
+            echo "ERROR: Mahzooz project ZIP was not found:"
             echo "$ZIP_FILE"
             echo ""
             echo "ZIP files in repository:"
@@ -34,12 +34,12 @@ jobs:
             exit 1
           fi
 
-          echo "Found v45 project ZIP:"
+          echo "Found Mahzooz project ZIP:"
           ls -lh "$ZIP_FILE"
 
           echo "ZIP_FILE=$ZIP_FILE" >> "$GITHUB_ENV"
 
-      - name: Extract v45 Project
+      - name: Extract Mahzooz Project
         shell: bash
         run: |
           set -e
@@ -52,17 +52,17 @@ jobs:
           GRADLEW=$(find project -type f -name "gradlew" -print -quit)
 
           if [ -z "$GRADLEW" ]; then
-            echo "ERROR: gradlew was not found inside the v45 project ZIP"
+            echo "ERROR: gradlew was not found inside the Mahzooz project ZIP"
             find project -maxdepth 6 -type f | head -300
             exit 1
           fi
 
           PROJECT_DIR=$(dirname "$GRADLEW")
 
-          echo "v45 Gradle wrapper:"
+          echo "Mahzooz Gradle wrapper:"
           echo "$GRADLEW"
 
-          echo "v45 Project directory:"
+          echo "Mahzooz Project directory:"
           echo "$PROJECT_DIR"
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
@@ -100,7 +100,7 @@ jobs:
           echo "Installed build tools:"
           ls -1 "$SDK_DIR/build-tools" 2>/dev/null || true
 
-      - name: Check v45 Gradle Wrapper
+      - name: Check Mahzooz Gradle Wrapper
         shell: bash
         run: |
           set -e
@@ -112,7 +112,7 @@ jobs:
           echo "Gradle wrapper version:"
           ./gradlew --version
 
-      - name: Build Mahzooz v45 APK
+      - name: Build Mahzooz APK
         shell: bash
         run: |
           set -e
@@ -121,12 +121,12 @@ jobs:
 
           chmod +x ./gradlew
 
-          echo "Building Mahzooz v45..."
+          echo "Building Mahzooz..."
           ./gradlew clean assembleDebug \
             --no-daemon \
             --stacktrace
 
-      - name: Verify v45 APK
+      - name: Verify Mahzooz APK
         shell: bash
         run: |
           set -e
@@ -134,7 +134,7 @@ jobs:
           APK="$PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk"
 
           if [ ! -f "$APK" ]; then
-            echo "ERROR: Mahzooz v45 APK was not generated"
+            echo "ERROR: Mahzooz APK was not generated"
 
             echo ""
             echo "Available output files:"
@@ -143,10 +143,10 @@ jobs:
             exit 1
           fi
 
-          echo "Mahzooz v45 APK successfully generated:"
+          echo "Mahzooz APK successfully generated:"
           ls -lh "$APK"
 
-      - name: Prepare Final v45 APK
+      - name: Prepare Final Mahzooz APK
         shell: bash
         run: |
           set -e
@@ -154,14 +154,14 @@ jobs:
           mkdir -p output
 
           cp "$PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk" \
-            output/MahzoozMonitor-Pro-v45-debug.apk
+            output/Mahzooz-debug.apk
 
           echo "Final APK:"
-          ls -lh output/MahzoozMonitor-Pro-v45-debug.apk
+          ls -lh output/Mahzooz-debug.apk
 
-      - name: Upload Mahzooz v45 APK
+      - name: Upload Mahzooz APK
         uses: actions/upload-artifact@v4
         with:
-          name: MahzoozMonitor-Pro-v45-debug
-          path: output/MahzoozMonitor-Pro-v45-debug.apk
+          name: Mahzooz-debug-apk
+          path: output/Mahzooz-debug.apk
           if-no-files-found: error

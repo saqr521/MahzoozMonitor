@@ -1,10 +1,10 @@
-name: Build Mahzooz
+name: Build Mahzooz v46
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - "Mahzooz.zip"
+      - "Mahzooz-v46.zip"
       - ".github/workflows/build.yml"
 
 permissions:
@@ -18,15 +18,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Find Mahzooz Project ZIP
+      - name: Find Mahzooz v46 Project ZIP
         shell: bash
         run: |
           set -e
 
-          ZIP_FILE="./Mahzooz.zip"
+          ZIP_FILE="./Mahzooz-v46.zip"
 
           if [ ! -f "$ZIP_FILE" ]; then
-            echo "ERROR: Mahzooz project ZIP was not found:"
+            echo "ERROR: Mahzooz v46 project ZIP was not found:"
             echo "$ZIP_FILE"
             echo ""
             echo "ZIP files in repository:"
@@ -34,12 +34,12 @@ jobs:
             exit 1
           fi
 
-          echo "Found Mahzooz project ZIP:"
+          echo "Found Mahzooz v46 project ZIP:"
           ls -lh "$ZIP_FILE"
 
           echo "ZIP_FILE=$ZIP_FILE" >> "$GITHUB_ENV"
 
-      - name: Extract Mahzooz Project
+      - name: Extract Mahzooz v46 Project
         shell: bash
         run: |
           set -e
@@ -52,17 +52,17 @@ jobs:
           GRADLEW=$(find project -type f -name "gradlew" -print -quit)
 
           if [ -z "$GRADLEW" ]; then
-            echo "ERROR: gradlew was not found inside the Mahzooz project ZIP"
+            echo "ERROR: gradlew was not found inside the Mahzooz v46 project ZIP"
             find project -maxdepth 6 -type f | head -300
             exit 1
           fi
 
           PROJECT_DIR=$(dirname "$GRADLEW")
 
-          echo "Mahzooz Gradle wrapper:"
+          echo "Mahzooz v46 Gradle wrapper:"
           echo "$GRADLEW"
 
-          echo "Mahzooz Project directory:"
+          echo "Mahzooz v46 Project directory:"
           echo "$PROJECT_DIR"
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
@@ -100,7 +100,7 @@ jobs:
           echo "Installed build tools:"
           ls -1 "$SDK_DIR/build-tools" 2>/dev/null || true
 
-      - name: Check Mahzooz Gradle Wrapper
+      - name: Check Mahzooz v46 Gradle Wrapper
         shell: bash
         run: |
           set -e
@@ -112,7 +112,7 @@ jobs:
           echo "Gradle wrapper version:"
           ./gradlew --version
 
-      - name: Build Mahzooz APK
+      - name: Build Mahzooz v46 APK
         shell: bash
         run: |
           set -e
@@ -121,12 +121,12 @@ jobs:
 
           chmod +x ./gradlew
 
-          echo "Building Mahzooz..."
+          echo "Building Mahzooz v46..."
           ./gradlew clean assembleDebug \
             --no-daemon \
             --stacktrace
 
-      - name: Verify Mahzooz APK
+      - name: Verify Mahzooz v46 APK
         shell: bash
         run: |
           set -e
@@ -134,7 +134,7 @@ jobs:
           APK="$PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk"
 
           if [ ! -f "$APK" ]; then
-            echo "ERROR: Mahzooz APK was not generated"
+            echo "ERROR: Mahzooz v46 APK was not generated"
 
             echo ""
             echo "Available output files:"
@@ -143,7 +143,7 @@ jobs:
             exit 1
           fi
 
-          echo "Mahzooz APK successfully generated:"
+          echo "Mahzooz v46 APK successfully generated:"
           ls -lh "$APK"
 
       - name: Prepare Final Mahzooz APK
@@ -162,6 +162,6 @@ jobs:
       - name: Upload Mahzooz APK
         uses: actions/upload-artifact@v4
         with:
-          name: Mahzooz-debug-apk
+          name: Mahzooz-v46-debug-apk
           path: output/Mahzooz-debug.apk
           if-no-files-found: error

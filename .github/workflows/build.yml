@@ -25,31 +25,35 @@ jobs:
           java-version: "17"
 
       - name: Setup Android SDK
-        run: |
-          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
-          echo "Android SDK: $ANDROID_HOME"
+        uses: android-actions/setup-android@v3
+        with:
+          packages: |
+            platform-tools
+            platforms;android-35
+            build-tools;35.0.0
 
       - name: Accept Android SDK licenses
         run: |
           yes | sdkmanager --licenses > /dev/null || true
 
-      - name: Install Android SDK packages
-        run: |
-          sdkmanager \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
-
       - name: Check Mahzooz ZIP
         run: |
-          test -f "./Mahzooz.zip"
+          if [ ! -f "./Mahzooz.zip" ]; then
+            echo "Mahzooz.zip was not found."
+            exit 1
+          fi
+
           echo "Mahzooz.zip found successfully."
+          ls -lh "./Mahzooz.zip"
 
       - name: Extract Mahzooz project
         run: |
           rm -rf project
           mkdir -p project
+
           unzip -q "./Mahzooz.zip" -d project
+
+          echo "Mahzooz project extracted successfully."
 
       - name: Find Gradle project
         run: |
@@ -57,11 +61,15 @@ jobs:
 
           if [ -z "$GRADLEW" ]; then
             echo "gradlew was not found."
+            echo "Project contents:"
+            find project -maxdepth 3 -type f | head -100
             exit 1
           fi
 
           PROJECT_DIR=$(dirname "$GRADLEW")
+
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
           chmod +x "$GRADLEW"
 
           echo "Gradle project found:"
@@ -71,11 +79,15 @@ jobs:
         run: |
           echo "Building Mahzooz..."
           cd "$PROJECT_DIR"
+
           ./gradlew clean assembleDebug --no-daemon
 
       - name: Find APK
         run: |
-          APK=$(find "${PROJECT_DIR}" -type f -path "*/build/outputs/apk/debug/*.apk" | head -n 1)
+          APK=$(find "$PROJECT_DIR" \
+            -type f \
+            -path "*/build/outputs/apk/debug/*.apk" \
+            | head -n 1)
 
           if [ -z "$APK" ]; then
             echo "Debug APK was not found."
@@ -83,10 +95,11 @@ jobs:
           fi
 
           mkdir -p output
-          cp "$APK" output/Mahzooz-debug.apk
 
-          echo "APK created:"
-          ls -lh output/Mahzooz-debug.apk
+          cp "$APK" "output/Mahzooz-debug.apk"
+
+          echo "APK created successfully:"
+          ls -lh "output/Mahzooz-debug.apk"
 
       - name: Upload Mahzooz APK
         uses: actions/upload-artifact@v4

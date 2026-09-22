@@ -26,15 +26,14 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          packages: |
-            platform-tools
-            platforms;android-35
-            build-tools;35.0.0
 
       - name: Accept Android SDK licenses
         run: |
           yes | sdkmanager --licenses > /dev/null || true
+
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Check Mahzooz ZIP
         run: |
@@ -95,7 +94,6 @@ jobs:
           fi
 
           mkdir -p output
-
           cp "$APK" "output/Mahzooz-debug.apk"
 
           echo "APK created successfully:"

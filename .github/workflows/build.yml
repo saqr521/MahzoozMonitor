@@ -26,42 +26,90 @@ jobs:
 
       - name: Setup Android SDK
         run: |
+          set -e
+
           export ANDROID_HOME="/usr/local/lib/android/sdk"
           export ANDROID_SDK_ROOT="/usr/local/lib/android/sdk"
 
           echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
 
-          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
-          echo "$ANDROID_HOME/cmdline-tools/16.0/bin" >> "$GITHUB_PATH"
+          echo "Searching for sdkmanager..."
 
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager"
+          SDKMANAGER=$(find "$ANDROID_HOME" \
+            -type f \
+            -name sdkmanager \
+            -perm -111 \
+            2>/dev/null | head -n 1 || true)
 
-          if [ ! -x "$SDKMANAGER" ]; then
-            echo "sdkmanager was not found:"
+          if [ -n "$SDKMANAGER" ]; then
+            echo "Existing sdkmanager found:"
             echo "$SDKMANAGER"
-            exit 1
+          else
+            echo "sdkmanager not found."
+            echo "Downloading Android command line tools..."
+
+            TMP_DIR="$RUNNER_TEMP/android-cmdline-tools"
+            rm -rf "$TMP_DIR"
+            mkdir -p "$TMP_DIR"
+
+            cd "$TMP_DIR"
+
+            curl -fL \
+              "https://dl.google.com/android/repository/commandlinetools-linux-12266719_latest.zip" \
+              -o commandlinetools.zip
+
+            rm -rf extracted
+            mkdir -p extracted
+
+            unzip -q commandlinetools.zip -d extracted
+
+            rm -rf "$ANDROID_HOME/cmdline-tools/latest"
+            mkdir -p "$ANDROID_HOME/cmdline-tools/latest"
+
+            cp -R extracted/cmdline-tools/. \
+              "$ANDROID_HOME/cmdline-tools/latest/"
+
+            SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+
+            chmod +x "$SDKMANAGER"
+
+            echo "Android command line tools installed."
           fi
+
+          SDK_DIR=$(dirname "$(dirname "$SDKMANAGER")")
+
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
+          echo "ANDROID_CMDLINE_TOOLS=$SDK_DIR" >> "$GITHUB_ENV"
+
+          echo "$(dirname "$SDKMANAGER")" >> "$GITHUB_PATH"
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
 
           echo "Using sdkmanager:"
           "$SDKMANAGER" --version
 
       - name: Accept Android SDK licenses
         run: |
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager"
+          set -e
 
           yes | "$SDKMANAGER" --licenses > /dev/null || true
 
+          echo "Android SDK licenses accepted."
+
       - name: Install Android SDK packages
         run: |
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager"
+          set -e
 
           "$SDKMANAGER" "platform-tools"
           "$SDKMANAGER" "platforms;android-35"
           "$SDKMANAGER" "build-tools;35.0.0"
 
+          echo "Android SDK packages installed successfully."
+
       - name: Check Mahzooz ZIP
         run: |
+          set -e
+
           if [ ! -f "./Mahzooz.zip" ]; then
             echo "Mahzooz.zip was not found."
             exit 1
@@ -72,6 +120,8 @@ jobs:
 
       - name: Extract Mahzooz project
         run: |
+          set -e
+
           rm -rf project
           mkdir -p project
 
@@ -81,12 +131,19 @@ jobs:
 
       - name: Find Gradle project
         run: |
-          GRADLEW=$(find project -type f -name gradlew | head -n 1)
+          set -e
+
+          GRADLEW=$(find project \
+            -type f \
+            -name gradlew \
+            | head -n 1)
 
           if [ -z "$GRADLEW" ]; then
             echo "gradlew was not found."
+
             echo "Project contents:"
-            find project -maxdepth 3 -type f | head -100
+            find project -maxdepth 4 -type f | head -100
+
             exit 1
           fi
 
@@ -101,13 +158,20 @@ jobs:
 
       - name: Build Mahzooz
         run: |
+          set -e
+
           echo "Building Mahzooz..."
+
           cd "$PROJECT_DIR"
 
           ./gradlew clean assembleDebug --no-daemon
 
+          echo "Mahzooz build completed successfully."
+
       - name: Find APK
         run: |
+          set -e
+
           APK=$(find "$PROJECT_DIR" \
             -type f \
             -path "*/build/outputs/apk/debug/*.apk" \
@@ -115,10 +179,18 @@ jobs:
 
           if [ -z "$APK" ]; then
             echo "Debug APK was not found."
+
+            echo "Searching build outputs:"
+            find "$PROJECT_DIR" \
+              -type f \
+              -path "*/build/outputs/*" \
+              | head -100
+
             exit 1
           fi
 
           mkdir -p output
+
           cp "$APK" "output/Mahzooz-debug.apk"
 
           echo "APK created successfully:"

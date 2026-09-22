@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - "Mahzooz-v46-Compact-System-UPDATED.zip"
+      - "Mahzooz-v46-Compact-System-FIXED.zip"
       - ".github/workflows/build.yml"
 
 permissions:
@@ -23,7 +23,7 @@ jobs:
         run: |
           set -e
 
-          ZIP_FILE="./Mahzooz-v46-Compact-System-UPDATED.zip"
+          ZIP_FILE="./Mahzooz-v46-Compact-System-FIXED.zip"
 
           if [ ! -f "$ZIP_FILE" ]; then
             echo "ERROR: Mahzooz project ZIP was not found:"
